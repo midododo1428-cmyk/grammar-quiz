@@ -63,7 +63,9 @@ function showReport(){showOnly('result');const r=attempt.report;if(!r){showOnly(
 function updateDelivery(){
  if(!attempt?.report)return;
  const d=attempt.delivery;
- let msg=d==='requested'
+ let msg=d==='confirmed'?'Report SAVED by the receiver and marked EMAIL SENT by the mail service. Only your teacher can verify that it reached the inbox.'
+ :d==='server_saved'?'Report SAVED on the server, but email delivery has not been confirmed. Use Re-send Detailed Report if your teacher did not receive it.'
+ :d==='requested'
   ? 'Report saved here and a sending request was made. Inbox delivery is NOT confirmed. If your teacher cannot find it, press Re-send Detailed Report.'
   :d==='sending'
   ? 'Sending your SAVED report now. Keep this page open until the message changes.'
@@ -121,6 +123,30 @@ function diagnosticPayload(){
 }
 // A no-cors response proves only that the browser queued the request.
 // It does NOT prove the Google Apps Script saved the report or sent email.
+function verifyReportReceipt(){
+ // Works once the Apps Script receiver has been redeployed with doGet status.
+ // The current older receiver may not support it; no response means UNKNOWN.
+ if(!attempt?.submitted||!attempt.reportId||!APPS_SCRIPT_URL)return;
+ const currentId=attempt.reportId;
+ const cbName='sparkAck'+Date.now()+'x'+Math.floor(Math.random()*100000);
+ let finished=false,check=null,ttl=null;
+ function done(status){
+  if(finished)return;finished=true;
+  try{if(ttl)clearTimeout(ttl);if(check?.parentNode)check.parentNode.removeChild(check);delete window[cbName]}catch(e){}
+  if(!status||!attempt||attempt.reportId!==currentId)return;
+  if(status.saved===true){
+   attempt.delivery=status.emailed===true?'confirmed':'server_saved';
+   attempt.confirmedAt=Date.now();writeStore();updateDelivery();
+  }
+ }
+ window[cbName]=done;
+ check=document.createElement('script');
+ check.async=true;
+ check.onerror=()=>done(null);
+ check.src=APPS_SCRIPT_URL+'?action=status&attemptId='+encodeURIComponent(currentId)+'&callback='+cbName+'&t='+Date.now();
+ ttl=setTimeout(()=>done(null),12000);
+ document.head.appendChild(check);
+}
 async function sendTeacherReport(force=false){
  if(!attempt?.report||attempt.delivery==='sending'||(attempt.delivery==='requested'&&!force))return;
  if(!attempt.reportId){
@@ -149,6 +175,7 @@ async function sendTeacherReport(force=false){
   });
   attempt.delivery='requested';
   attempt.lastReportRequestAt=Date.now();
+  setTimeout(verifyReportReceipt,1400);
   attempt.lastReportError=null;
  }catch(err){
   attempt.delivery='failed';
