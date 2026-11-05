@@ -78,7 +78,7 @@ async function diagnosticPayload(){
  const skippedItems=r.detail.filter(x=>skips.has(x.id)).map(x=>({questionId:x.id,skill:x.skill,question:x.prompts.join(' / '),status:'Skipped — teacher preview only'}));
  const duration=fmtDuration(r.durationMs);
  const id=teacher?'TEST':attempt.spkId;
- const title=(teacher?'[TEACHER TEST — NOT A STUDENT] ':'')+'Spark Y4 Plurals & Grammar | Duration '+duration+(teacher?' | Skipped: '+skips.size+(skips.size?' ('+[...skips].join(', ')+')':''):'');
+ const title=(teacher?'[TEACHER TEST — NOT A STUDENT] ':'')+'Spark Y4 Plurals & Grammar | Duration '+duration+' | Time away '+fmtDuration(r.activity?.awayMs||0)+' | Exits '+(r.activity?.departures||0)+' | Returns '+(r.activity?.returns||0)+(teacher?' | Skipped: '+skips.size+(skips.size?' ('+[...skips].join(', ')+')':''):'');
  const name=(teacher?'[TEACHER TEST] ':'')+attempt.name;
  return {recipient:TEACHER_EMAIL,studentName:name,name,student:name,
   studentId:id,studentID:id,spkId:id,spkID:id,
