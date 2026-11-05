@@ -111,43 +111,50 @@ function updateDelivery(){
 }
 function detailedReportPayload(){
  const r=attempt.report;
- const errors=r.detail.filter(x=>!x.correct);
- const skills=Object.entries(r.skills).map(([skill,v])=>({
+ const teacher=QUIZ_ID.includes('_TEACHER');
+ const skipped=new Set(teacher?(r.skippedIds||[]):[]);
+ const mistakes=r.detail.filter(x=>!x.correct&&!skipped.has(x.id));
+ const skillAnalysis=Object.entries(r.skills).map(([skill,v])=>({
   skill,total:v.total,correct:v.correct,correctFirstTry:v.correct,
-  mistakes:v.total-v.correct,percentage:v.total?Math.round(100*v.correct/v.total):0
+  mistakes:r.detail.filter(x=>x.skill===skill&&!x.correct&&!skipped.has(x.id)).length,
+  skipped:r.detail.filter(x=>x.skill===skill&&skipped.has(x.id)).length,
+  percentage:v.total?Math.round(100*v.correct/v.total):0
  }));
- const details=errors.map(x=>{
-  const n=attempt.order.indexOf(x.id)+1;
-  const answer=x.answers?.join(' | ')||'(blank)';
-  const expected=x.expected?.join(' | ')||'';
-  return {questionId:x.id,questionNumber:n,number:n,
-    question:x.prompts.join(' / '),skill:x.skill,studentAnswer:answer,
-    answer,correctAnswer:expected,expected,correct:false,explanation:x.explanation};
- });
+ const mistakeDetails=mistakes.map(x=>({
+  questionId:x.id,questionNumber:attempt.order.indexOf(x.id)+1,
+  skill:x.skill,question:x.prompts.join(' / '),
+  studentAnswer:x.answers?.join(' | ')||'(blank)',
+  correctAnswer:x.expected?.join(' | ')||'',
+  explanation:x.explanation
+ }));
+ // Each answer appears ONCE in the saved report. Earlier versions repeated
+ // the whole report across 5 aliases, exceeding the server's 54 KB limit.
+ const fullAttemptLog=r.detail.map(x=>({
+  id:x.id,skill:x.skill,question:x.prompts,student:x.answers,
+  correctAnswer:x.expected,correct:x.correct
+ }));
  const duration=fmtDuration(r.durationMs);
- const title='Year 4 — Written Homophones, Grammar & Punctuation | Time taken: '+duration
-   +' | Away: '+fmtDuration(r.activity?.awayMs||0)
-   +' | Left: '+(r.activity?.departures||0)
-   +' | Returned: '+(r.activity?.returns||0);
+ const studentName=(teacher?'[TEACHER TEST] ':'')+attempt.name;
+ const title=(teacher?'[TEACHER TEST — NOT A STUDENT] ':'')
+   +(teacher?'Spark Y4 Plurals & Grammar':QUIZ_ID.includes('DIAGNOSTIC_32')?'Spark Y4 Homophones & Grammar':'Spark Y4 Plurals & Grammar')
+   +' | Duration '+duration
+   +' | Exits '+(r.activity?.departures||0)
+   +' | Returns '+(r.activity?.returns||0);
  return {
-  recipient:TEACHER_EMAIL,studentName:attempt.name,name:attempt.name,student:attempt.name,
-  studentId:attempt.spkId,studentID:attempt.spkId,spkId:attempt.spkId,spkID:attempt.spkId,
-  year:'Year 4',yearGroup:'Year 4',
-  quizId:QUIZ_ID,quizID:QUIZ_ID,quizTitle:title,quiz:title,
+  quizId:QUIZ_ID,quizTitle:title,
+  studentName,studentId:teacher?'TEST':attempt.spkId,
+  year:'Year 4',score:r.score,total:r.total,percentage:r.percent,
+  mistakes:mistakeDetails.length,mistakeDetails,skillAnalysis,fullAttemptLog,
   startedAt:new Date(attempt.startedAt).toISOString(),
   submittedAt:new Date(r.endedAt).toISOString(),
-  score:r.score,total:r.total,percentage:r.percent,percent:r.percent,
-  mistakes:errors.length,totalMistakes:errors.length,mistakeCount:errors.length,
-  mistakeDetails:details,detailedMistakes:details,wrongAnswers:details,
-  itemDetails:details,items:details,
-  skillAnalysis:skills,skillData:skills,
-  skillBreakdown:Object.fromEntries(skills.map(x=>[x.skill,{...x}])),
-  fullAttemptLog:r.detail,allAnswers:r.detail,
-  timeTaken:duration,elapsedTime:duration,durationSeconds:Math.floor(r.durationMs/1000),
-  durationText:duration,tabChanges:r.activity?.departures||0,
-  pageLeaves:r.activity?.departures||0,pageReturns:r.activity?.returns||0,
+  durationText:duration,durationSeconds:Math.floor(r.durationMs/1000),
+  pageLeaves:r.activity?.departures||0,
+  pageReturns:r.activity?.returns||0,
   awaySeconds:Math.floor((r.activity?.awayMs||0)/1000),
-  activityHistory:r.activity?.events||[],
+  activityHistory:(r.activity?.events||[]).slice(-35),
+  totalActivityEvents:(r.activity?.events||[]).length,
+  skippedCount:skipped.size,skippedQuestionIds:[...skipped],
+  isTeacherTest:teacher,
   attemptVersion:attempt.attemptVersion||1
  };
 }
