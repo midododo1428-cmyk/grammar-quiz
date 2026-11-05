@@ -81,44 +81,50 @@ function updateDelivery(){
 function diagnosticPayload(){
  const r=attempt.report;
  const teacher=QUIZ_ID.includes('_TEACHER');
- const skips=new Set(teacher?(r.skippedIds||[]):[]);
- const bad=r.detail.filter(x=>!x.correct&&!skips.has(x.id));
- const skills=Object.entries(r.skills).map(([skill,v])=>{
-  const mismatches=r.detail.filter(x=>x.skill===skill&&!x.correct&&!skips.has(x.id)).length;
-  const skipped=r.detail.filter(x=>x.skill===skill&&skips.has(x.id)).length;
-  return {skill,total:v.total,correct:v.correct,correctFirstTry:v.correct,mistakes:mismatches,skipped,percentage:v.total?Math.round(100*v.correct/v.total):0};
- });
- const details=bad.map(x=>{
-  const n=attempt.order.indexOf(x.id)+1;
-  const answer=x.answers?.join(' | ')||'(no answer)';
-  const expected=x.expected?.join(' | ')||'';
-  return {questionId:x.id,questionNumber:n,number:n,skill:x.skill,question:x.prompts.join(' / '),studentAnswer:answer,answer,correctAnswer:expected,expected,correct:false,explanation:x.explanation};
- });
- const skippedItems=r.detail.filter(x=>skips.has(x.id)).map(x=>({questionId:x.id,skill:x.skill,question:x.prompts.join(' / '),status:'Skipped — teacher preview only'}));
+ const skipped=new Set(teacher?(r.skippedIds||[]):[]);
+ const mistakes=r.detail.filter(x=>!x.correct&&!skipped.has(x.id));
+ const skillAnalysis=Object.entries(r.skills).map(([skill,v])=>({
+  skill,total:v.total,correct:v.correct,correctFirstTry:v.correct,
+  mistakes:r.detail.filter(x=>x.skill===skill&&!x.correct&&!skipped.has(x.id)).length,
+  skipped:r.detail.filter(x=>x.skill===skill&&skipped.has(x.id)).length,
+  percentage:v.total?Math.round(100*v.correct/v.total):0
+ }));
+ const mistakeDetails=mistakes.map(x=>({
+  questionId:x.id,questionNumber:attempt.order.indexOf(x.id)+1,
+  skill:x.skill,question:x.prompts.join(' / '),
+  studentAnswer:x.answers?.join(' | ')||'(blank)',
+  correctAnswer:x.expected?.join(' | ')||'',
+  explanation:x.explanation
+ }));
+ // Each answer appears ONCE in the saved report. Earlier versions repeated
+ // the whole report across 5 aliases, exceeding the server's 54 KB limit.
+ const fullAttemptLog=r.detail.map(x=>({
+  id:x.id,skill:x.skill,question:x.prompts,student:x.answers,
+  correctAnswer:x.expected,correct:x.correct
+ }));
  const duration=fmtDuration(r.durationMs);
- const id=teacher?'TEST':attempt.spkId;
- const title=(teacher?'[TEACHER TEST — NOT A STUDENT] ':'')+'Spark Y4 Plurals & Grammar | Duration '+duration+' | Time away '+fmtDuration(r.activity?.awayMs||0)+' | Exits '+(r.activity?.departures||0)+' | Returns '+(r.activity?.returns||0)+(teacher?' | Skipped: '+skips.size+(skips.size?' ('+[...skips].join(', ')+')':''):'');
- const name=(teacher?'[TEACHER TEST] ':'')+attempt.name;
- return {recipient:TEACHER_EMAIL,studentName:name,name,student:name,
-  studentId:id,studentID:id,spkId:id,spkID:id,
-  year:'Year 4',yearGroup:'Year 4',quizId:QUIZ_ID,quizID:QUIZ_ID,
-  quizTitle:title,quiz:title,
-  score:r.score,total:r.total,percentage:r.percent,percent:r.percent,
-  mistakes:bad.length,totalMistakes:bad.length,mistakeCount:bad.length,
-  mistakeDetails:details,detailedMistakes:details,wrongAnswers:details,
-  itemDetails:details,items:details,skillAnalysis:skills,skillData:skills,
-  skillBreakdown:Object.fromEntries(skills.map(v=>[v.skill,{...v}])),
-  fullAttemptLog:r.detail,allAnswers:r.detail,
-  skippedCount:skips.size,skippedQuestionIds:[...skips],skippedQuestions:skippedItems,
-  isTeacherTest:teacher,
-  tabChanges:r.activity?.departures||0,
-  durationSeconds:Math.floor(r.durationMs/1000),durationText:duration,
-  timeTaken:duration,elapsedTime:duration,
-  pageLeaves:r.activity?.departures||0,pageReturns:r.activity?.returns||0,
-  awaySeconds:Math.floor((r.activity?.awayMs||0)/1000),
-  activityHistory:r.activity?.events||[],
+ const studentName=(teacher?'[TEACHER TEST] ':'')+attempt.name;
+ const title=(teacher?'[TEACHER TEST — NOT A STUDENT] ':'')
+   +(teacher?'Spark Y4 Plurals & Grammar':QUIZ_ID.includes('DIAGNOSTIC_32')?'Spark Y4 Homophones & Grammar':'Spark Y4 Plurals & Grammar')
+   +' | Duration '+duration
+   +' | Exits '+(r.activity?.departures||0)
+   +' | Returns '+(r.activity?.returns||0);
+ return {
+  quizId:QUIZ_ID,quizTitle:title,
+  studentName,studentId:teacher?'TEST':attempt.spkId,
+  year:'Year 4',score:r.score,total:r.total,percentage:r.percent,
+  mistakes:mistakeDetails.length,mistakeDetails,skillAnalysis,fullAttemptLog,
   startedAt:new Date(attempt.startedAt).toISOString(),
-  submittedAt:new Date(r.endedAt).toISOString()
+  submittedAt:new Date(r.endedAt).toISOString(),
+  durationText:duration,durationSeconds:Math.floor(r.durationMs/1000),
+  pageLeaves:r.activity?.departures||0,
+  pageReturns:r.activity?.returns||0,
+  awaySeconds:Math.floor((r.activity?.awayMs||0)/1000),
+  activityHistory:(r.activity?.events||[]).slice(-35),
+  totalActivityEvents:(r.activity?.events||[]).length,
+  skippedCount:skipped.size,skippedQuestionIds:[...skipped],
+  isTeacherTest:teacher,
+  attemptVersion:attempt.attemptVersion||1
  };
 }
 // A no-cors response proves only that the browser queued the request.
