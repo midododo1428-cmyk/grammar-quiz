@@ -193,6 +193,21 @@ async function sendTeacherReport(force=false){
  }
  writeStore();updateDelivery();
 }
+function resendDetailedReport(){
+ if(!attempt?.report)return;
+ if(!confirm('Re-send your SAVED detailed report to the teacher? This will NOT erase your answers.'))return;
+ sendTeacherReport(true);
+}
+function restartAfterSubmission(){
+ if(!attempt?.submitted)return;
+ const code=attempt.spkId,name=attempt.name,prior=attempt;
+ if(!confirm('Start a NEW attempt for '+code+'? Your current report will be kept as a browser backup. Only restart when the teacher asks you to.'))return;
+ try{localStorage.setItem(studentStoreKey(code)+'_PREVIOUS_REPORT',JSON.stringify(prior));}
+ catch(e){alert('Could not back up the previous report. Use Download Backup first.');return;}
+ attempt={id:QUIZ_ID,name,spkId:code,attemptVersion:(prior.attemptVersion||1)+1,startedAt:Date.now(),at:0,order:makeOrder(),answers:{},submitted:false,report:null,delivery:'not-sent',activity:{awaySince:null,departures:0,returns:0,awayMs:0,history:[]}};
+ if(!writeStore()){attempt=prior;showReport();alert('Could not save the new attempt. Use a normal Chrome or Safari tab.');return;}
+ showQuestion();
+}
 async function copyReport(){const txt=reportText();try{await navigator.clipboard.writeText(txt);alert('Report copied.')}catch(e){const ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();alert('Report copied.')}}
 function downloadBackup(){const obj={quizId:QUIZ_ID,student:attempt.name,spkId:attempt.spkId,report:attempt.report,textReport:reportText()};const blob=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`Spark_Y4_${attempt.spkId}_Report.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),2000)}
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')markAway('tab hidden or app backgrounded');else markReturn('tab visible');});
