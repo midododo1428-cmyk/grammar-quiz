@@ -115,7 +115,7 @@ function answer(oi){
  const q=current();if(!q||st.finished)return;
  let a=st.answers[q.id]||{tries:0,firstCorrect:null,done:false,value:null};
  if(a.done)return;
- a.tries++;if(a.firstCorrect===null)a.firstCorrect=oi===q.correct;a.value=oi;
+ a.tries++;if(a.firstCorrect===null){a.firstCorrect=oi===q.correct;a.firstAnswer=oi}a.value=oi;
  const ok=oi===q.correct;
  if(st.mode==='training'){a.done=ok}
  else{a.done=true}
@@ -127,7 +127,7 @@ function answer(oi){
  }else{
     // Assessment: no correctness feedback before the end.
     [...el('opts').children].forEach(b=>b.disabled=true);
-    sound(true);el('feedback').className='neutral';el('feedback').textContent='Answer recorded. Continue to the next question.';
+    el('feedback').className='neutral';el('feedback').textContent='Answer recorded. Continue to the next question.';
     el('feedback').classList.remove('hidden');el('next').classList.remove('hidden');
  }
 }
@@ -143,7 +143,7 @@ function scoreFor(cat){return BANK.filter(q=>q.cat===cat&&st.answers[q.id]?.firs
 function reportText(){
  const score=BANK.filter(q=>st.answers[q.id]?.firstCorrect).length;
  const h=['SPARK ACADEMY — Y4 COMMON MISTAKES RESCUE QUIZ','Name: '+st.name,'SPK ID: '+st.spk,'Mode: '+st.mode,'First Try Score: '+score+'/'+BANK.length,'Vital: '+scoreFor('Vital')+'/22','Polish: '+scoreFor('Polish')+'/10','Duration: '+duration(st.endedAt-st.startedAt),'Questions to Review:'];
- for(const q of BANK){const a=st.answers[q.id];if(!a?.firstCorrect)h.push(q.id+' · '+q.skill+'\nQuestion: '+q.q+'\nStudent: '+q.options[a?.value]+'\nCorrect: '+q.options[q.correct]+'\nRule: '+q.why)}
+ for(const q of BANK){const a=st.answers[q.id];if(!a?.firstCorrect)h.push(q.id+' · '+q.skill+'\nQuestion: '+q.q+'\nFirst Answer: '+q.options[a?.firstAnswer??a?.value]+'\nCorrect: '+q.options[q.correct]+'\nRule: '+q.why)}
  return h.join('\n\n');
 }
 function renderEnd(){
@@ -153,7 +153,7 @@ function renderEnd(){
  el('vitalScore').textContent=scoreFor('Vital')+'/22';el('polishScore').textContent=scoreFor('Polish')+'/10';
  el('duration').textContent=duration(st.endedAt-st.startedAt);
  el('fixes').innerHTML=BANK.filter(q=>!st.answers[q.id]?.firstCorrect).map(q=>'<div class="fix"><b>'+esc(q.skill)+'</b><p>'+esc(q.q)+'</p><p>✅ '+esc(q.options[q.correct])+'</p><span class="tag">'+esc(q.why)+'</span></div>').join('')||'<div class="callout">Great work! All 32 questions correct on the first try.</div>';
- el('retryTraining').classList.toggle('hidden',st.mode!=='training');
+ el('retryTraining').classList.toggle('hidden',st.mode!=='training');el('retryReport').classList.toggle('hidden',st.mode!=='assessment'||st.spk==='TEST'||st.reportState==='confirmed');
  el('finishNote').textContent=st.mode==='training'?'In Training, you may retry after a wrong answer. The displayed score counts FIRST tries, so it fairly measures what you knew before hints.':'In Assessment, each answer was recorded once. Reopening the link on this browser keeps your completed attempt.';
  el('sendStatus').textContent=st.mode==='training'?'Training mode: no automatic teacher email. Use Copy Report if needed.':st.spk==='TEST'?'Teacher preview: report not sent.':'Teacher report: '+(st.reportState==='confirmed'?'Confirmed and emailed.':st.reportState==='saved'?'Saved in teacher sheet; email not yet confirmed.':st.reportState==='requested'?'Submission requested; awaiting server confirmation.':st.reportState==='failed'?'Automatic sending failed; please download the backup.':'Preparing to send...');
 }
@@ -166,7 +166,7 @@ function newTraining(){
  localStorage.removeItem(key);st=null;displayOrder=[];display('start')
 }
 function payload(){
- const details=BANK.map((q,i)=>({id:q.id,skill:q.skill,question:[q.q],student:[q.options[st.answers[q.id].value]],correctAnswer:[q.options[q.correct]],correct:!!st.answers[q.id].firstCorrect,explanation:q.why,cat:q.cat}));
+ const details=BANK.map((q,i)=>({id:q.id,skill:q.skill,question:[q.q],student:[q.options[st.answers[q.id].firstAnswer??st.answers[q.id].value]],correctAnswer:[q.options[q.correct]],correct:!!st.answers[q.id].firstCorrect,explanation:q.why,cat:q.cat}));
  const missed=details.filter(x=>!x.correct),skills={};
  for(const item of details){let k=skills[item.skill]||(skills[item.skill]={total:0,correct:0,correctFirstTry:0,mistakes:0,skipped:0});k.total++;if(item.correct){k.correct++;k.correctFirstTry++}else k.mistakes++}
  return {quizId:QUIZ_ID,quizTitle:'Spark Y4 Common Mistakes Rescue — '+(st.mode==='assessment'?'Assessment':'Training')+' | Duration '+duration(st.endedAt-st.startedAt)+' | Exits '+st.departures+' | Returns '+st.returns,studentName:st.name,studentId:st.spk,year:'Year 4',
